@@ -55,7 +55,7 @@ function hideAd(ad) {
     adsHidden += 1;
   }
 
-  console.log('Twitter ads hidden: ', adsHidden.toString());
+  console.log('X ads hidden: ', adsHidden.toString());
 }
 
 function getAndHideAds() {
