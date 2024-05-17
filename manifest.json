@@ -4,7 +4,7 @@
   "action": {},
   "short_name": "Hide Twitter Ads",
   "description": "Free tool that hides Promoted Tweets while you browse Twitter (X.com).",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "icons": { "16": "img/hide-twitter-ads-16.png",
            "48": "img/hide-twitter-ads-48.png",
           "128": "img/hide-twitter-ads-128.png" },
@@ -17,7 +17,9 @@
     {
       "matches": [
         "http://*.twitter.com/*",
-        "https://*.twitter.com/*"
+        "https://*.twitter.com/*",
+        "http://*.x.com/*",
+        "https://*.x.com/*"
         ],
       "js":["content.js"]
     }
