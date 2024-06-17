@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Hide Twitter / X.com Ads",
+  "name": "Hide X.com Ads",
   "action": {},
-  "short_name": "Hide Twitter Ads",
-  "description": "Free tool that hides Promoted Tweets while you browse Twitter (X.com).",
-  "version": "1.1.9",
-  "icons": { "16": "img/hide-twitter-ads-16.png",
-           "48": "img/hide-twitter-ads-48.png",
-          "128": "img/hide-twitter-ads-128.png" },
+  "short_name": "Block Ads on X",
+  "description": "Free tool that hides Promoted Tweets/Posts while you browse X.com (formerly Twitter).",
+  "version": "1.2.1",
+  "icons": { "16": "img/hide-x-ads-16.png",
+           "48": "img/hide-x-ads-48.png",
+          "128": "img/hide-x-ads-128.png" },
   "permissions": [
   ],
   "background": {
