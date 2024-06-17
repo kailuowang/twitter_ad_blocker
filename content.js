@@ -87,3 +87,8 @@ var subscribeToPremiumExists = setInterval(function() {
   let timeline = document.querySelector("aside[aria-label='Subscribe to Premium']");
   if (timeline) { timeline.remove() }
 }, 500);
+
+var upgradeToPremiumPlusExists = setInterval(function() {
+  let timeline = document.querySelector("aside[aria-label='Upgrade to Premium+']");
+  if (timeline) { timeline.remove() }
+}, 500);
