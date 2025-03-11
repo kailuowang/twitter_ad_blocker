@@ -3,7 +3,7 @@
   "name": "F.E.M X.com",
   "action": {},
   "short_name": "Fostering Empathy Mindfully X.com",
-  "description": "Free tool that hides ads and set landing page to Following instead of For You.  Forked from https://github.com/ryanckulp/twitter_ad_blocker/",
+  "description": "Free tool that hides ads and set landing page to Following instead of For You. Forked from github.com/ryanckulp",
   "version": "1.0.0",
   "icons": { "16": "img/hide-x-ads-16.png",
            "48": "img/hide-x-ads-48.png",
