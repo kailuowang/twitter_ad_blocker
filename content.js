@@ -8,6 +8,11 @@ var articleSelector = "article[data-testid=tweet]";
 var switchToFollowingTab = true; 
 var removePeopleToFollow = false;
 var hasSuccessfullySwitchedTab = false; // Track if we've already successfully switched tabs
+var userClickedForYouTab = false; // Track if user manually clicked For You tab
+var lastTabSwitchTime = 0; // Track the last time we programmatically switched tabs
+var shouldMonitorTabChanges = true; // Whether to keep monitoring tab changes
+var tabCheckIntervalId = null; // ID for the tab checking interval
+var tabSetupIntervalId = null; // ID for the tab setup interval
 
 // Load user preferences from storage
 chrome.storage.sync.get(
@@ -19,16 +24,34 @@ chrome.storage.sync.get(
     switchToFollowingTab = items.switchToFollowing;
     removePeopleToFollow = items.removePeopleToFollow;
     console.log("Settings loaded:", items);
+    console.log("Tab switching enabled:", switchToFollowingTab);
     
     // Initial actions after settings are loaded
     if (document.readyState === 'complete') {
       getAndHideAds();
       if (switchToFollowingTab) {
+        // Log all tabs for debugging
+        logAllTabs();
         switchToFollowing();
       }
     }
   }
 );
+
+// Helper function to log all tabs
+function logAllTabs() {
+  console.log("=== Current Tab Status ===");
+  const tabs = document.querySelectorAll('a[role="tab"]');
+  if (tabs.length === 0) {
+    console.log("No tabs found on the page");
+  }
+  tabs.forEach(tab => {
+    const selected = tab.getAttribute('aria-selected') === 'true';
+    const text = tab.textContent.trim();
+    console.log(`Tab: "${text}" | Selected: ${selected}`);
+  });
+  console.log("========================");
+}
 
 var sponsoredSvgPath = 'M20.75 2H3.25C2.007 2 1 3.007 1 4.25v15.5C1 20.993 2.007 22 3.25 22h17.5c1.243 0 2.25-1.007 2.25-2.25V4.25C23 3.007 21.993 2 20.75 2zM17.5 13.504c0 .483-.392.875-.875.875s-.875-.393-.875-.876V9.967l-7.547 7.546c-.17.17-.395.256-.62.256s-.447-.086-.618-.257c-.342-.342-.342-.896 0-1.237l7.547-7.547h-3.54c-.482 0-.874-.393-.874-.876s.392-.875.875-.875h5.65c.483 0 .875.39.875.874v5.65z';
 var sponsoredBySvgPath = 'M19.498 3h-15c-1.381 0-2.5 1.12-2.5 2.5v13c0 1.38 1.119 2.5 2.5 2.5h15c1.381 0 2.5-1.12 2.5-2.5v-13c0-1.38-1.119-2.5-2.5-2.5zm-3.502 12h-2v-3.59l-5.293 5.3-1.414-1.42L12.581 10H8.996V8h7v7z';
@@ -89,26 +112,56 @@ function getAndHideAds() {
 
 // Function to switch to the Following tab
 function switchToFollowing() {
-  // Don't try to switch if the setting is off or we've already successfully switched
-  if (!switchToFollowingTab || hasSuccessfullySwitchedTab) return;
+  // Don't try to switch if the setting is off or we're no longer monitoring
+  if (!switchToFollowingTab || !shouldMonitorTabChanges) {
+    console.log("Tab switching disabled or monitoring stopped");
+    return;
+  }
+  
+  // Don't switch if user manually clicked For You tab recently
+  if (userClickedForYouTab) {
+    console.log("Not switching tabs because user manually clicked 'For You' tab");
+    return;
+  }
+  
+  // Log all tabs for debugging
+  logAllTabs();
   
   // First, check if we're already on the Following tab
-  const alreadyOnFollowing = document.querySelector('a[role="tab"][href="/home"][aria-selected="true"]');
-  if (alreadyOnFollowing) {
+  // We need to check both the aria-selected attribute AND the text content
+  const selectedTab = document.querySelector('a[role="tab"][aria-selected="true"]');
+  if (selectedTab && selectedTab.textContent.includes('Following')) {
     console.log('Already on Following tab');
     hasSuccessfullySwitchedTab = true;
-    // Clear any remaining interval timers
-    if (checkForFollowingTab) {
-      clearInterval(checkForFollowingTab);
-      checkForFollowingTab = null;
-    }
+    return;
+  }
+  
+  // Check if we're on a tab that's not "For you" (e.g., "Lists", "Messages", etc.)
+  if (selectedTab && !selectedTab.textContent.includes('For you')) {
+    console.log('On a tab other than "For you", not switching: ' + selectedTab.textContent.trim());
+    return;
+  }
+  
+  // If we recently switched tabs (within 2 seconds), don't try again immediately
+  // This prevents rapid switching if there's a refresh cycle
+  const now = Date.now();
+  if (now - lastTabSwitchTime < 2000) {
+    console.log('Recently switched tabs, waiting before trying again');
     return;
   }
   
   console.log('Attempting to switch to Following tab...');
   
   // Direct selector for the Following tab as an anchor element
-  const followingTab = document.querySelector('a[role="tab"][href="/home"]:not([aria-selected="true"])');
+  // Look for tab with "Following" text that isn't selected
+  let followingTab = null;
+  const allTabs = document.querySelectorAll('a[role="tab"]');
+  for (const tab of allTabs) {
+    if (tab.textContent.includes('Following') && tab.getAttribute('aria-selected') !== 'true') {
+      followingTab = tab;
+      break;
+    }
+  }
   
   if (followingTab) {
     console.log('Found Following tab with direct selector');
@@ -117,37 +170,10 @@ function switchToFollowing() {
       followingTab.click();
       console.log('Switched to Following tab');
       hasSuccessfullySwitchedTab = true;
-      // Clear interval after successful switch
-      if (checkForFollowingTab) {
-        clearInterval(checkForFollowingTab);
-        checkForFollowingTab = null;
-      }
+      lastTabSwitchTime = Date.now();
       return;
     } catch (e) {
       console.error('Error clicking Following tab:', e);
-    }
-  }
-  
-  // Alternative approach for older/different UI versions
-  const tabLinks = document.querySelectorAll('a[role="tab"]');
-  
-  // Find the "Following" tab by its text content
-  for (const tab of tabLinks) {
-    if (tab.textContent.includes('Following') && tab.getAttribute('aria-selected') !== 'true') {
-      // It's not already selected
-      try {
-        tab.click();
-        console.log('Switched to Following tab (alternative method)');
-        hasSuccessfullySwitchedTab = true;
-        // Clear interval after successful switch
-        if (checkForFollowingTab) {
-          clearInterval(checkForFollowingTab);
-          checkForFollowingTab = null;
-        }
-        return;
-      } catch (e) {
-        console.error('Error clicking Following tab (alternative):', e);
-      }
     }
   }
   
@@ -166,11 +192,7 @@ function switchToFollowing() {
       followingLink.click();
       console.log('Switched to Following tab (XPath method)');
       hasSuccessfullySwitchedTab = true;
-      // Clear interval after successful switch
-      if (checkForFollowingTab) {
-        clearInterval(checkForFollowingTab);
-        checkForFollowingTab = null;
-      }
+      lastTabSwitchTime = Date.now();
       return;
     } catch (e) {
       console.error('Error clicking Following tab (XPath):', e);
@@ -189,11 +211,7 @@ function switchToFollowing() {
           tab.click();
           console.log('Switched to Following tab (fallback method)');
           hasSuccessfullySwitchedTab = true;
-          // Clear interval after successful switch
-          if (checkForFollowingTab) {
-            clearInterval(checkForFollowingTab);
-            checkForFollowingTab = null;
-          }
+          lastTabSwitchTime = Date.now();
         } catch (e) {
           console.error('Error clicking Following tab (fallback):', e);
         }
@@ -262,11 +280,154 @@ var checkForFollowingTab = setInterval(function() {
   }
 }, 1000);
 
+// Setup tab click listener to detect when user manually clicks tabs
+function setupTabClickListeners() {
+  // Find all tab elements
+  const tabElements = document.querySelectorAll('a[role="tab"]');
+  
+  tabElements.forEach(tab => {
+    // Add click listener to all tabs if they don't already have one
+    if (!tab.dataset.listenerAdded) {
+      tab.addEventListener('click', function(e) {
+        // Check if this is the "For You" tab when it's clicked
+        if (this.textContent.includes('For you')) {
+          console.log('User clicked "For You" tab');
+          userClickedForYouTab = true;
+          // Reset after 7 seconds to allow auto-switching again
+          setTimeout(() => {
+            userClickedForYouTab = false;
+            console.log('User "For You" click timeout expired, resuming auto-switching');
+          }, 7000);
+        } else if (this.textContent.includes('Following')) {
+          console.log('User clicked "Following" tab');
+          // User manually clicked Following, update our state
+          hasSuccessfullySwitchedTab = true;
+        }
+      });
+      tab.dataset.listenerAdded = 'true';
+      console.log('Added click listener to tab: ' + tab.textContent.trim());
+    }
+  });
+}
+
+// Check for tabs periodically and set up listeners
+tabSetupIntervalId = setInterval(setupTabClickListeners, 2000);
+
+// Function to stop monitoring tab changes after some time
+function stopTabMonitoring() {
+  console.log('Stopping tab change monitoring');
+  shouldMonitorTabChanges = false;
+  
+  // Clear all tab-related intervals
+  if (tabCheckIntervalId) {
+    clearInterval(tabCheckIntervalId);
+    tabCheckIntervalId = null;
+  }
+  
+  if (tabSetupIntervalId) {
+    clearInterval(tabSetupIntervalId);
+    tabSetupIntervalId = null;
+  }
+  
+  if (checkForFollowingTab) {
+    clearInterval(checkForFollowingTab);
+    checkForFollowingTab = null;
+  }
+  
+  // Disconnect the MutationObserver
+  if (tabObserver) {
+    tabObserver.disconnect();
+  }
+}
+
+// Function to check if we need to switch to Following tab
+function checkCurrentTab() {
+  // Only check if we should be switching tabs and if we're still monitoring
+  if (!switchToFollowingTab || !shouldMonitorTabChanges) return;
+  
+  // Don't react if user manually clicked For You
+  if (userClickedForYouTab) return;
+  
+  // Log all tabs for debugging
+  logAllTabs();
+  
+  // Check all tabs to find the currently selected one
+  const tabs = document.querySelectorAll('a[role="tab"]');
+  let selectedTabContent = null;
+  
+  // First, find which tab is selected
+  for (const tab of tabs) {
+    if (tab.getAttribute('aria-selected') === 'true') {
+      selectedTabContent = tab.textContent.trim();
+      console.log('Selected tab is: "' + selectedTabContent + '"');
+      break;
+    }
+  }
+  
+  // If no tab is selected or we can't determine which one, do nothing
+  if (!selectedTabContent) {
+    console.log('No tab appears to be selected');
+    return;
+  }
+  
+  // Check if we're already on "Following" tab
+  if (selectedTabContent.includes('Following')) {
+    console.log('Already on Following tab');
+    hasSuccessfullySwitchedTab = true;
+    return;
+  }
+  
+  // Only switch if we're specifically on "For you" tab
+  if (selectedTabContent.includes('For you')) {
+    console.log('On "For you" tab, will attempt to switch to Following');
+    hasSuccessfullySwitchedTab = false;
+    setTimeout(switchToFollowing, 500);
+  } else {
+    // We're on some other tab like "Lists" or "Highlights", leave it alone
+    console.log('On tab "' + selectedTabContent + '", not switching');
+  }
+}
+
+// Run the check periodically
+tabCheckIntervalId = setInterval(checkCurrentTab, 2000);
+
+// Also set up a MutationObserver for more responsive detection
+const tabObserver = new MutationObserver(function(mutations) {
+  // Stop processing if we're no longer monitoring
+  if (!shouldMonitorTabChanges) return;
+  
+  for (const mutation of mutations) {
+    // If we observe a change to aria-selected attribute
+    if (mutation.type === 'attributes' && 
+        mutation.attributeName === 'aria-selected' && 
+        mutation.target.getAttribute('aria-selected') === 'true') {
+      
+      // Run a check immediately when a tab becomes selected
+      checkCurrentTab();
+      return;
+    }
+  }
+});
+
+// Start observing tab changes
+tabObserver.observe(document.body, { 
+  subtree: true, 
+  attributes: true, 
+  attributeFilter: ['aria-selected'] 
+});
+
 // Try one more time after the page is fully loaded
 window.addEventListener('load', function() {
   setTimeout(function() {
     if (switchToFollowingTab) {
       switchToFollowing();
+      
+      // Stop monitoring tab changes after 7 seconds
+      setTimeout(function() {
+        if (hasSuccessfullySwitchedTab) {
+          stopTabMonitoring();
+        }
+      }, 7000);
     }
   }, 1500); // Larger delay after page is fully loaded
 });
@@ -278,9 +439,19 @@ new MutationObserver(() => {
     lastUrl = location.href;
     console.log('URL changed, resetting tab switch state');
     hasSuccessfullySwitchedTab = false;
+    userClickedForYouTab = false; // Reset user click state on navigation
+    shouldMonitorTabChanges = true; // Re-enable monitoring on URL change
+    
     // Only try to switch to Following tab if we're on the main timeline
     if (location.pathname === '/' || location.pathname === '/home') {
       setTimeout(switchToFollowing, 1000);
+      
+      // Stop monitoring after 7 seconds if we've successfully switched
+      setTimeout(function() {
+        if (hasSuccessfullySwitchedTab) {
+          stopTabMonitoring();
+        }
+      }, 7000);
     }
   }
 }).observe(document, {subtree: true, childList: true});
