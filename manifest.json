@@ -3,13 +3,18 @@
   "name": "Hide X.com Ads",
   "action": {},
   "short_name": "Block Ads on X",
-  "description": "Free tool that hides Promoted Tweets/Posts while you browse X.com (formerly Twitter).",
-  "version": "1.2.1",
+  "description": "Free tool that hides Promoted Tweets/Posts while you browse X.com (formerly Twitter) and switches to Following tab.",
+  "version": "1.3.0",
   "icons": { "16": "img/hide-x-ads-16.png",
            "48": "img/hide-x-ads-48.png",
           "128": "img/hide-x-ads-128.png" },
   "permissions": [
+    "storage"
   ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
   "background": {
     "service_worker": "background.js"
   },

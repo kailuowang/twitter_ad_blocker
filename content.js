@@ -4,13 +4,38 @@ var trendSelector = "div[data-testid=trend]";
 var userSelector = "div[data-testid=UserCell]";
 var articleSelector = "article[data-testid=tweet]";
 
+// Default settings (will be overridden by stored preferences)
+var switchToFollowingTab = true; 
+var removePeopleToFollow = false;
+var hasSuccessfullySwitchedTab = false; // Track if we've already successfully switched tabs
+
+// Load user preferences from storage
+chrome.storage.sync.get(
+  {
+    switchToFollowing: true,  // default to true
+    removePeopleToFollow: false  // default to false
+  },
+  function(items) {
+    switchToFollowingTab = items.switchToFollowing;
+    removePeopleToFollow = items.removePeopleToFollow;
+    console.log("Settings loaded:", items);
+    
+    // Initial actions after settings are loaded
+    if (document.readyState === 'complete') {
+      getAndHideAds();
+      if (switchToFollowingTab) {
+        switchToFollowing();
+      }
+    }
+  }
+);
+
 var sponsoredSvgPath = 'M20.75 2H3.25C2.007 2 1 3.007 1 4.25v15.5C1 20.993 2.007 22 3.25 22h17.5c1.243 0 2.25-1.007 2.25-2.25V4.25C23 3.007 21.993 2 20.75 2zM17.5 13.504c0 .483-.392.875-.875.875s-.875-.393-.875-.876V9.967l-7.547 7.546c-.17.17-.395.256-.62.256s-.447-.086-.618-.257c-.342-.342-.342-.896 0-1.237l7.547-7.547h-3.54c-.482 0-.874-.393-.874-.876s.392-.875.875-.875h5.65c.483 0 .875.39.875.874v5.65z';
 var sponsoredBySvgPath = 'M19.498 3h-15c-1.381 0-2.5 1.12-2.5 2.5v13c0 1.38 1.119 2.5 2.5 2.5h15c1.381 0 2.5-1.12 2.5-2.5v-13c0-1.38-1.119-2.5-2.5-2.5zm-3.502 12h-2v-3.59l-5.293 5.3-1.414-1.42L12.581 10H8.996V8h7v7z';
 var youMightLikeSvgPath = 'M12 1.75c-5.11 0-9.25 4.14-9.25 9.25 0 4.77 3.61 8.7 8.25 9.2v2.96l1.15-.17c1.88-.29 4.11-1.56 5.87-3.5 1.79-1.96 3.17-4.69 3.23-7.97.09-5.54-4.14-9.77-9.25-9.77zM13 14H9v-2h4v2zm2-4H9V8h6v2z';
 var adsSvgPath = 'M19.498 3h-15c-1.381 0-2.5 1.12-2.5 2.5v13c0 1.38 1.119 2.5 2.5 2.5h15c1.381 0 2.5-1.12 2.5-2.5v-13c0-1.38-1.119-2.5-2.5-2.5zm-3.502 12h-2v-3.59l-5.293 5.3-1.414-1.42L12.581 10H8.996V8h7v7z';
 var peopleFollowSvgPath = 'M17.863 13.44c1.477 1.58 2.366 3.8 2.632 6.46l.11 1.1H3.395l.11-1.1c.266-2.66 1.155-4.88 2.632-6.46C7.627 11.85 9.648 11 12 11s4.373.85 5.863 2.44zM12 2C9.791 2 8 3.79 8 6s1.791 4 4 4 4-1.79 4-4-1.791-4-4-4z';
 var xAd = '>Ad<'; // TODO: add more languages; appears to only be used for English accounts as of 2023-08-03
-var removePeopleToFollow = false; // set to 'true' if you want these suggestions removed, however note this also deletes some tweet replies
 const promotedTweetTextSet = new Set(['Promoted Tweet', 'プロモツイート']);
 
 function getAds() {
@@ -62,12 +87,140 @@ function getAndHideAds() {
   getAds().forEach(hideAd)
 }
 
+// Function to switch to the Following tab
+function switchToFollowing() {
+  // Don't try to switch if the setting is off or we've already successfully switched
+  if (!switchToFollowingTab || hasSuccessfullySwitchedTab) return;
+  
+  // First, check if we're already on the Following tab
+  const alreadyOnFollowing = document.querySelector('a[role="tab"][href="/home"][aria-selected="true"]');
+  if (alreadyOnFollowing) {
+    console.log('Already on Following tab');
+    hasSuccessfullySwitchedTab = true;
+    // Clear any remaining interval timers
+    if (checkForFollowingTab) {
+      clearInterval(checkForFollowingTab);
+      checkForFollowingTab = null;
+    }
+    return;
+  }
+  
+  console.log('Attempting to switch to Following tab...');
+  
+  // Direct selector for the Following tab as an anchor element
+  const followingTab = document.querySelector('a[role="tab"][href="/home"]:not([aria-selected="true"])');
+  
+  if (followingTab) {
+    console.log('Found Following tab with direct selector');
+    // Found the tab and it's not already selected, click it
+    try {
+      followingTab.click();
+      console.log('Switched to Following tab');
+      hasSuccessfullySwitchedTab = true;
+      // Clear interval after successful switch
+      if (checkForFollowingTab) {
+        clearInterval(checkForFollowingTab);
+        checkForFollowingTab = null;
+      }
+      return;
+    } catch (e) {
+      console.error('Error clicking Following tab:', e);
+    }
+  }
+  
+  // Alternative approach for older/different UI versions
+  const tabLinks = document.querySelectorAll('a[role="tab"]');
+  
+  // Find the "Following" tab by its text content
+  for (const tab of tabLinks) {
+    if (tab.textContent.includes('Following') && tab.getAttribute('aria-selected') !== 'true') {
+      // It's not already selected
+      try {
+        tab.click();
+        console.log('Switched to Following tab (alternative method)');
+        hasSuccessfullySwitchedTab = true;
+        // Clear interval after successful switch
+        if (checkForFollowingTab) {
+          clearInterval(checkForFollowingTab);
+          checkForFollowingTab = null;
+        }
+        return;
+      } catch (e) {
+        console.error('Error clicking Following tab (alternative):', e);
+      }
+    }
+  }
+  
+  // If still not found, try looking for exact match with specified HTML structure
+  const followingLink = document.evaluate(
+    "//a[@role='tab']//span[text()='Following']/ancestor::a[@role='tab']", 
+    document, 
+    null, 
+    XPathResult.FIRST_ORDERED_NODE_TYPE, 
+    null
+  ).singleNodeValue;
+  
+  if (followingLink && followingLink.getAttribute('aria-selected') !== 'true') {
+    try {
+      console.log('Found Following tab via XPath');
+      followingLink.click();
+      console.log('Switched to Following tab (XPath method)');
+      hasSuccessfullySwitchedTab = true;
+      // Clear interval after successful switch
+      if (checkForFollowingTab) {
+        clearInterval(checkForFollowingTab);
+        checkForFollowingTab = null;
+      }
+      return;
+    } catch (e) {
+      console.error('Error clicking Following tab (XPath):', e);
+    }
+  }
+  
+  // If still not found, try the previous approach as a fallback
+  const tabs = document.querySelectorAll('div[role="tablist"] div[role="presentation"]');
+  
+  for (const tab of tabs) {
+    if (tab.textContent.includes('Following')) {
+      // Check if it's not already selected
+      const isSelected = tab.querySelector('div[style*="background-color: rgb(29, 155, 240)"]');
+      if (!isSelected) {
+        try {
+          tab.click();
+          console.log('Switched to Following tab (fallback method)');
+          hasSuccessfullySwitchedTab = true;
+          // Clear interval after successful switch
+          if (checkForFollowingTab) {
+            clearInterval(checkForFollowingTab);
+            checkForFollowingTab = null;
+          }
+        } catch (e) {
+          console.error('Error clicking Following tab (fallback):', e);
+        }
+      } else {
+        console.log('Already on Following tab (detected through color)');
+        hasSuccessfullySwitchedTab = true;
+        // Clear interval since we're already on the tab
+        if (checkForFollowingTab) {
+          clearInterval(checkForFollowingTab);
+          checkForFollowingTab = null;
+        }
+      }
+      break;
+    }
+  }
+}
+
 // hide ads on page load
-document.addEventListener('load', () => getAndHideAds());
+document.addEventListener('load', () => {
+  getAndHideAds();
+  switchToFollowing();
+});
 
 // oftentimes, tweets render after onload. LCP should catch them.
 new PerformanceObserver((entryList) => {
   getAndHideAds();
+  switchToFollowing();
 }).observe({type: 'largest-contentful-paint', buffered: true});
 
 // re-check as user scrolls
@@ -92,3 +245,69 @@ var upgradeToPremiumPlusExists = setInterval(function() {
   let timeline = document.querySelector("aside[aria-label='Upgrade to Premium+']");
   if (timeline) { timeline.remove() }
 }, 500);
+
+// Try switching tab immediately when page is interactive
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(function() {
+    if (switchToFollowingTab) {
+      switchToFollowing();
+    }
+  }, 500); // Small delay to ensure the DOM has updated
+});
+
+// Keep checking for the "Following" tab if it doesn't load immediately
+var checkForFollowingTab = setInterval(function() {
+  if (switchToFollowingTab) {
+    switchToFollowing();
+  }
+}, 1000);
+
+// Try one more time after the page is fully loaded
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    if (switchToFollowingTab) {
+      switchToFollowing();
+    }
+  }, 1500); // Larger delay after page is fully loaded
+});
+
+// Reset the switched flag when URL changes
+let lastUrl = location.href; 
+new MutationObserver(() => {
+  if (location.href !== lastUrl) {
+    lastUrl = location.href;
+    console.log('URL changed, resetting tab switch state');
+    hasSuccessfullySwitchedTab = false;
+    // Only try to switch to Following tab if we're on the main timeline
+    if (location.pathname === '/' || location.pathname === '/home') {
+      setTimeout(switchToFollowing, 1000);
+    }
+  }
+}).observe(document, {subtree: true, childList: true});
+
+// Listen for changes to the settings
+chrome.storage.onChanged.addListener(function(changes, namespace) {
+  if (namespace === 'sync') {
+    if (changes.switchToFollowing) {
+      switchToFollowingTab = changes.switchToFollowing.newValue;
+      console.log('Setting updated: switchToFollowing =', switchToFollowingTab);
+      
+      // If the setting was turned off, clear the interval
+      if (!switchToFollowingTab && checkForFollowingTab) {
+        clearInterval(checkForFollowingTab);
+        checkForFollowingTab = null;
+      } 
+      // If the setting was turned on, reset flag and try switching
+      else if (switchToFollowingTab) {
+        hasSuccessfullySwitchedTab = false;
+        switchToFollowing();
+      }
+    }
+    if (changes.removePeopleToFollow) {
+      removePeopleToFollow = changes.removePeopleToFollow.newValue;
+      console.log('Setting updated: removePeopleToFollow =', removePeopleToFollow);
+      // Re-run ad hiding to apply the new setting
+      getAndHideAds();
+    }
+  }
+});
