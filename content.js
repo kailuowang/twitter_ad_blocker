@@ -241,8 +241,31 @@ new PerformanceObserver((entryList) => {
   switchToFollowing();
 }).observe({type: 'largest-contentful-paint', buffered: true});
 
-// re-check as user scrolls
-document.addEventListener('scroll', () => getAndHideAds());
+// Debounce function to delay execution until input stops
+function debounce(func, delay) {
+  let timeoutId;
+  return function(...args) {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      func.apply(this, args);
+    }, delay);
+  };
+}
+
+// Debounced version of getAndHideAds (wait 500ms after changes stop)
+const debouncedHideAds = debounce(getAndHideAds, 500);
+
+// Set up a MutationObserver to detect when new content (including ads) is added
+const contentObserver = new MutationObserver(debouncedHideAds);
+
+// Start observing the document body for new content
+setTimeout(() => {
+  contentObserver.observe(document.body, { 
+    childList: true, 
+    subtree: true 
+  });
+  console.log('Observing for new content with debounced ad hiding');
+}, 1000);
 
 // re-check as user scrolls tweet sidebar (exists when image is opened)
 var sidebarExists = setInterval(function() {
